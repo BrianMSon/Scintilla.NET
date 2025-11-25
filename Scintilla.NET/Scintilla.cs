@@ -83,32 +83,41 @@ namespace ScintillaNET
             }
 
             // 2. check run-time paths
-            string nativeSubFolder = Path.Combine("runtimes", "win-" + Helpers.GetArchitectureRid(WinApiHelpers.GetProcessArchitecture()), "native");
+            string runtimesSubFolder = Path.Combine("runtimes", "win-" + Helpers.GetArchitectureRid(WinApiHelpers.GetProcessArchitecture()), "native");
+            string[] nativeSubFolders = new[]
+            {
+                Environment.CurrentDirectory,
+                runtimesSubFolder
+            };
 
-            {
-                string location = Assembly.GetEntryAssembly()?.Location;
-                if (!string.IsNullOrWhiteSpace(location))
-                {
-                    string folder = Path.GetDirectoryName(location);
-                    if (!string.IsNullOrWhiteSpace(folder))
-                        yield return Path.Combine(folder, nativeSubFolder);
-                }
-            }
             Assembly assembly = Assembly.GetAssembly(typeof(Scintilla));
+
+            foreach (string nativeSubFolder in nativeSubFolders)
             {
-                string location = assembly?.Location;
-                if (!string.IsNullOrWhiteSpace(location))
                 {
-                    string folder = Path.GetDirectoryName(location);
-                    if (!string.IsNullOrWhiteSpace(folder))
-                        yield return Path.Combine(folder, nativeSubFolder);
+                    string location = Assembly.GetEntryAssembly()?.Location;
+                    if (!string.IsNullOrWhiteSpace(location))
+                    {
+                        string folder = Path.GetDirectoryName(location);
+                        if (!string.IsNullOrWhiteSpace(folder))
+                            yield return Path.Combine(folder, nativeSubFolder);
+                    }
                 }
-            }
-            {
-                string folder = AppDomain.CurrentDomain.BaseDirectory;
-                if (!string.IsNullOrWhiteSpace(folder))
                 {
-                    yield return Path.Combine(folder, nativeSubFolder);
+                    string location = assembly?.Location;
+                    if (!string.IsNullOrWhiteSpace(location))
+                    {
+                        string folder = Path.GetDirectoryName(location);
+                        if (!string.IsNullOrWhiteSpace(folder))
+                            yield return Path.Combine(folder, nativeSubFolder);
+                    }
+                }
+                {
+                    string folder = AppDomain.CurrentDomain.BaseDirectory;
+                    if (!string.IsNullOrWhiteSpace(folder))
+                    {
+                        yield return Path.Combine(folder, nativeSubFolder);
+                    }
                 }
             }
 
@@ -119,14 +128,14 @@ namespace ScintillaNET
                 string nugetScintillaPackageFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), @".nuget\packages\scintilla5.net");
                 Version packageVersion = assembly.GetName().Version;
                 string versionString = packageVersion.Revision == 0 ? packageVersion.ToString(3) : packageVersion.ToString();
-                yield return Path.Combine(nugetScintillaPackageFolder, versionString, nativeSubFolder);
+                yield return Path.Combine(nugetScintillaPackageFolder, versionString, runtimesSubFolder);
 
                 // then check the project folder using the Scintilla.NET assembly location
                 // move up a few levels to the host project folder and append the location nuget used at install
                 string nugetScintillaNETLocation = assembly.Location;
                 string nugetScintillaPackageName = assembly.GetName().Name;
                 string rootProjectFolder = Path.GetFullPath(Path.Combine(nugetScintillaNETLocation, @"..\..\..\.."));
-                yield return Path.Combine(rootProjectFolder, "packages", nugetScintillaPackageName + "." + versionString, nativeSubFolder);
+                yield return Path.Combine(rootProjectFolder, "packages", nugetScintillaPackageName + "." + versionString, runtimesSubFolder);
             }
 
             // 4. check environment variable custom paths

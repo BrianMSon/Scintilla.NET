@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
 		<ProjectGuid>{22AE2386-60F1-476E-9303-61CDB0AAC4CF}</ProjectGuid>
 		<TargetFrameworks>net462;net8.0-windows</TargetFrameworks>
@@ -62,7 +62,6 @@
 		<Reference Include="System.Design" />
 	</ItemGroup>
 	<Target Name="PostPack" AfterTargets="Pack">
-		<Exec Command="powershell .\nupkg.ps1 -MSBuildProjectDirectory '$(MSBuildProjectDirectory)' -NuGetPackageRoot '$(NuGetPackageRoot)' -NuGetPackageSourceDir '$(SolutionDir)\registry' -PackageOutputPath '$(PackageOutputPath)' -PackageId '$(PackageId)' -PackageVersion '$(PackageVersion)'" />
 	</Target>
 	<Target Name="PostClean" AfterTargets="Clean">
 		<RemoveDir Directories="$(SolutionDir)\registry" ContinueOnError="true" />
