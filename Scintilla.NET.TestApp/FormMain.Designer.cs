@@ -74,6 +74,8 @@
             this.scintilla.SavePointLeft += new System.EventHandler<System.EventArgs>(this.scintilla_SavePointLeft);
             this.scintilla.SavePointReached += new System.EventHandler<System.EventArgs>(this.scintilla_SavePointReached);
             this.scintilla.TextChanged += new System.EventHandler(this.scintilla_TextChanged);
+            this.scintilla.TabWidth = 2;
+            this.scintilla.ViewWhitespace = WhitespaceMode.VisibleAlways;
             // 
             // toolStripStatusLabel
             // 

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -3553,6 +3554,73 @@ namespace ScintillaNET
                         break;
                 }
             }
+        }
+
+        /// <summary>
+        /// Processes Windows messages.
+        /// </summary>
+        private bool _lastActionWasColumnTab = false;
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            _lastActionWasColumnTab = false;
+            base.OnMouseDown(e);
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == Keys.Tab)
+            {
+                // Handle Tab key in Column Mode (multi-selection, width=0):
+                // The first Tab performs the default action. A consecutive second Tab moves the cursor 
+                // to the first non-whitespace character (indentation position) before inserting the tab.
+                bool isColumnModeWidthZero = this.Selections.Count > 1 && this.Selections.All(s => s.Start == s.End);
+
+                if (isColumnModeWidthZero)
+                {
+                    if (_lastActionWasColumnTab)
+                    {
+                        this.BeginUndoAction();
+                        try
+                        {
+                            foreach (var sel in this.Selections)
+                            {
+                                int lineIndex = this.LineFromPosition(sel.Start);
+                                if (lineIndex >= 0 && lineIndex < this.Lines.Count)
+                                {
+                                    Line line = this.Lines[lineIndex];
+                                    string text = line.Text;
+                                    int indent = 0;
+                                    while (indent < text.Length && (text[indent] == ' ' || text[indent] == '\t'))
+                                    {
+                                        indent++;
+                                    }
+
+                                    // Move the cursor to the indentation position
+                                    int newPos = line.Position + indent;
+                                    sel.Start = newPos;
+                                    sel.End = newPos;
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            this.EndUndoAction();
+                        }
+                    }
+                    _lastActionWasColumnTab = true;
+                }
+                else
+                {
+                    _lastActionWasColumnTab = false;
+                }
+            }
+            else
+            {
+                _lastActionWasColumnTab = false;
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
         /// <summary>
