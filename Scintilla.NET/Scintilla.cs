@@ -217,6 +217,9 @@ namespace ScintillaNET
         // Double-click
         private bool doubleClick;
 
+        // Rectangular selection virtual space handling
+        private bool fillingVirtualSpace;
+
         // Pinned data
         private IntPtr fillUpChars;
 
@@ -2572,6 +2575,134 @@ namespace ScintillaNET
                 OnMarginRightClick(eventArgs);
         }
 
+        /// <summary>
+        /// Adjusts rectangular selection positions before key input.
+        /// Corrects cursor positions when they are past the target column, and fills virtual space with actual spaces.
+        /// For example, when selecting column 0 on an empty line and a line with text,
+        /// ensures the cursor is positioned correctly (before the text, not after).
+        /// </summary>
+        private void AdjustRectangularSelectionPositions()
+        {
+            // Prevent recursive calls
+            if (this.fillingVirtualSpace)
+                return;
+
+            // Check if this is a rectangular selection
+            bool isRectangular = DirectMessage(NativeMethods.SCI_SELECTIONISRECTANGLE) != IntPtr.Zero;
+            if (!isRectangular)
+                return;
+
+            int selCount = DirectMessage(NativeMethods.SCI_GETSELECTIONS).ToInt32();
+            if (selCount <= 1)
+                return;
+
+            // Get target column from rectangular selection properties
+            int rectAnchor = DirectMessage(NativeMethods.SCI_GETRECTANGULARSELECTIONANCHOR).ToInt32();
+            int rectAnchorVS = DirectMessage(NativeMethods.SCI_GETRECTANGULARSELECTIONANCHORVIRTUALSPACE).ToInt32();
+            int rectCaret = DirectMessage(NativeMethods.SCI_GETRECTANGULARSELECTIONCARET).ToInt32();
+            int rectCaretVS = DirectMessage(NativeMethods.SCI_GETRECTANGULARSELECTIONCARETVIRTUALSPACE).ToInt32();
+
+            // Calculate target column - use the minimum column (leftmost position) as the target
+            int anchorColumn = DirectMessage(NativeMethods.SCI_GETCOLUMN, new IntPtr(rectAnchor)).ToInt32() + rectAnchorVS;
+            int caretColumn = DirectMessage(NativeMethods.SCI_GETCOLUMN, new IntPtr(rectCaret)).ToInt32() + rectCaretVS;
+            int targetColumn = Math.Min(anchorColumn, caretColumn);
+
+            // Process all selections from bottom to top to avoid position shifts affecting unprocessed selections
+            // Use List<Tuple<...>> for .NET Framework 4.6.2 compatibility
+            // Tuple: (selectionIndex, currentPosition, targetPosition, spacesNeeded)
+            var selectionsToProcess = new List<Tuple<int, int, int, int>>();
+
+            for (int i = 0; i < selCount; i++)
+            {
+                int caretPos = DirectMessage(NativeMethods.SCI_GETSELECTIONNCARET, new IntPtr(i)).ToInt32();
+                int virtualSpace = DirectMessage(NativeMethods.SCI_GETSELECTIONNCARETVIRTUALSPACE, new IntPtr(i)).ToInt32();
+
+                // Get line information
+                int lineIndex = DirectMessage(NativeMethods.SCI_LINEFROMPOSITION, new IntPtr(caretPos)).ToInt32();
+                int lineStartPos = DirectMessage(NativeMethods.SCI_POSITIONFROMLINE, new IntPtr(lineIndex)).ToInt32();
+                int lineEndPos = DirectMessage(NativeMethods.SCI_GETLINEENDPOSITION, new IntPtr(lineIndex)).ToInt32();
+                int currentColumn = DirectMessage(NativeMethods.SCI_GETCOLUMN, new IntPtr(caretPos)).ToInt32();
+
+                // Case 1: Line is shorter than target column (need to fill with spaces)
+                if (virtualSpace > 0 || (caretPos >= lineEndPos && currentColumn < targetColumn))
+                {
+                    int spacesNeeded = targetColumn - currentColumn;
+                    if (spacesNeeded > 0)
+                    {
+                        // Tuple: (selectionIndex, currentPosition, targetPosition (same as current for this case), spacesNeeded)
+                        selectionsToProcess.Add(Tuple.Create(i, caretPos, caretPos, spacesNeeded));
+                    }
+                }
+                // Case 2: Cursor is past the target column (need to reposition to target column)
+                else if (currentColumn > targetColumn)
+                {
+                    // Find the correct position for the target column on this line
+                    int correctPos = DirectMessage(NativeMethods.SCI_FINDCOLUMN, new IntPtr(lineIndex), new IntPtr(targetColumn)).ToInt32();
+
+                    // Only process if the position is different and valid
+                    if (correctPos >= lineStartPos && correctPos < caretPos)
+                    {
+                        // Tuple: (selectionIndex, currentPosition, targetPosition, spacesNeeded = 0)
+                        selectionsToProcess.Add(Tuple.Create(i, caretPos, correctPos, 0));
+                    }
+                }
+            }
+
+            if (selectionsToProcess.Count == 0)
+                return;
+
+            // Sort by current position descending to process from bottom to top
+            selectionsToProcess.Sort((a, b) => b.Item2.CompareTo(a.Item2));
+
+            try
+            {
+                this.fillingVirtualSpace = true;
+                BeginUndoAction();
+
+                foreach (var selInfo in selectionsToProcess)
+                {
+                    int selIndex = selInfo.Item1;
+                    int currentPos = selInfo.Item2;
+                    int targetPos = selInfo.Item3;
+                    int spacesNeeded = selInfo.Item4;
+
+                    if (spacesNeeded > 0)
+                    {
+                        // Insert spaces to fill the gap to reach the target column
+                        string spaces = new string(' ', spacesNeeded);
+                        byte[] spacesBytes = Helpers.GetBytes(spaces, Encoding, zeroTerminated: true);
+
+                        unsafe
+                        {
+                            fixed (byte* bp = spacesBytes)
+                            {
+                                DirectMessage(NativeMethods.SCI_INSERTTEXT, new IntPtr(currentPos), new IntPtr(bp));
+                            }
+                        }
+
+                        // Update selection position after inserting spaces
+                        int newPos = currentPos + spacesNeeded;
+                        DirectMessage(NativeMethods.SCI_SETSELECTIONNCARET, new IntPtr(selIndex), new IntPtr(newPos));
+                        DirectMessage(NativeMethods.SCI_SETSELECTIONNANCHOR, new IntPtr(selIndex), new IntPtr(newPos));
+                        DirectMessage(NativeMethods.SCI_SETSELECTIONNCARETVIRTUALSPACE, new IntPtr(selIndex), IntPtr.Zero);
+                        DirectMessage(NativeMethods.SCI_SETSELECTIONNANCHORVIRTUALSPACE, new IntPtr(selIndex), IntPtr.Zero);
+                    }
+                    else if (targetPos != currentPos)
+                    {
+                        // Reposition the selection caret and anchor to the correct column
+                        DirectMessage(NativeMethods.SCI_SETSELECTIONNCARET, new IntPtr(selIndex), new IntPtr(targetPos));
+                        DirectMessage(NativeMethods.SCI_SETSELECTIONNANCHOR, new IntPtr(selIndex), new IntPtr(targetPos));
+                    }
+                }
+
+                EndUndoAction();
+            }
+            finally
+            {
+                this.fillingVirtualSpace = false;
+            }
+        }
+
         private void ScnModified(ref NativeMethods.SCNotification scn)
         {
             // The InsertCheck, BeforeInsert, BeforeDelete, Insert, and Delete events can all potentially require
@@ -3450,6 +3581,18 @@ namespace ScintillaNET
                 case NativeMethods.WM_XBUTTONDBLCLK:
                     this.doubleClick = true;
                     goto default;
+
+                case NativeMethods.WM_KEYDOWN:
+                    // Before processing key input, adjust rectangular selection positions if needed
+                    AdjustRectangularSelectionPositions();
+                    base.WndProc(ref m);
+                    break;
+
+                case NativeMethods.WM_CHAR:
+                    // Before processing character input, adjust rectangular selection positions if needed
+                    AdjustRectangularSelectionPositions();
+                    base.WndProc(ref m);
+                    break;
 
                 case NativeMethods.WM_DESTROY:
                     WmDestroy(ref m);

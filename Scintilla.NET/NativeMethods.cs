@@ -1209,12 +1209,17 @@ public static class NativeMethods
     public const int WM_SETCURSOR = 0x0020;
     public const int WM_NOTIFY = 0x004E;
     public const int WM_NCPAINT = 0x0085;
+    public const int WM_KEYDOWN = 0x0100;
+    public const int WM_CHAR = 0x0102;
     public const int WM_LBUTTONDBLCLK = 0x0203;
     public const int WM_RBUTTONDBLCLK = 0x0206;
     public const int WM_MBUTTONDBLCLK = 0x0209;
     public const int WM_XBUTTONDBLCLK = 0x020D;
     public const int WM_USER = 0x0400;
     public const int WM_REFLECT = WM_USER + 0x1C00;
+
+    // Virtual key codes
+    public const int VK_TAB = 0x09;
 
     // Window styles
     public const int WS_BORDER = 0x00800000;
