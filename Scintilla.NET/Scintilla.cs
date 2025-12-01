@@ -1747,6 +1747,10 @@ namespace ScintillaNET
             {
                 margin.Width = 0;
             }
+
+            // Keep column/multiple selections typing in sync across all carets
+            AdditionalSelectionTyping = true;
+            MultipleSelection = true;
         }
 
         /// <summary>
@@ -2591,6 +2595,11 @@ namespace ScintillaNET
             // Check if this is a rectangular selection
             bool isRectangular = DirectMessage(NativeMethods.SCI_SELECTIONISRECTANGLE) != IntPtr.Zero;
             if (!isRectangular)
+                return;
+
+            // If selection is not empty (meaning we have text selected), we skip adjustment.
+            // This prevents the selection from being collapsed/cleared when we want to replace/delete it.
+            if (DirectMessage(NativeMethods.SCI_GETSELECTIONEMPTY) == IntPtr.Zero)
                 return;
 
             int selCount = DirectMessage(NativeMethods.SCI_GETSELECTIONS).ToInt32();
@@ -3984,8 +3993,8 @@ namespace ScintillaNET
         /// <summary>
         /// Gets or sets whether additional typing affects multiple selections.
         /// </summary>
-        /// <returns>true if typing will affect multiple selections instead of just the main selection; otherwise, false. The default is false.</returns>
-        [DefaultValue(false)]
+        /// <returns>true if typing will affect multiple selections instead of just the main selection; otherwise, false. The default is true.</returns>
+        [DefaultValue(true)]
         [Category("Multiple Selection")]
         [Description("Whether typing, backspace, or delete works with multiple selection simultaneously.")]
         public bool AdditionalSelectionTyping
@@ -5792,9 +5801,9 @@ namespace ScintillaNET
         /// </summary>
         /// <returns>
         /// true if multiple selections can be made by holding the CTRL key and dragging the mouse; otherwise, false.
-        /// The default is false.
+        /// The default is true.
         /// </returns>
-        [DefaultValue(false)]
+        [DefaultValue(true)]
         [Category("Multiple Selection")]
         [Description("Enable or disable multiple selection with the CTRL key.")]
         public bool MultipleSelection
