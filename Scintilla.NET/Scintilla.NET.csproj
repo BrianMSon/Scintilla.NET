@@ -11,6 +11,7 @@
 		<UseWindowsForms>true</UseWindowsForms>
 		<OutputPath>bin\$(Configuration)\</OutputPath>
 		<Platforms>AnyCPU</Platforms>
+		<DefaultItemExcludes>$(DefaultItemExcludes);artifacts\**</DefaultItemExcludes>
 	</PropertyGroup>
 	<PropertyGroup>
 		<LangVersion>latest</LangVersion>
